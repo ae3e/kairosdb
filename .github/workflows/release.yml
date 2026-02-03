@@ -64,14 +64,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            TAG="${GITHUB_REF#refs/tags/}"
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TAG="${{ github.ref_name }}"
           else
             # workflow_dispatch: use 'test' as tag
             TAG="test-$(date +%Y%m%d%H%M%S)"
           fi
 
-          VERSION="${TAG#v}"  # enlève le 'v' si présent
+          VERSION="${TAG#v}"  # remove leading 'v' if present
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
