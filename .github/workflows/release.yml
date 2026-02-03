@@ -95,6 +95,10 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          platforms: linux/amd64
+          outputs: type=image,push=true
+          provenance: false
+          sbom: false
           push: true
           tags: ${{ steps.ver.outputs.image }}
           cache-from: type=gha
