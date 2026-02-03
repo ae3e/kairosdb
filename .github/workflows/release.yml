@@ -26,7 +26,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"   # adapte si tu utilises une autre version
+          java-version: "17"
 
       - name: Build package (creates build/*.tar.gz)
         shell: bash
@@ -45,17 +45,40 @@ jobs:
           echo "tar_path=$TAR_PATH" >> "$GITHUB_OUTPUT"
           echo "tar_name=$(basename "$TAR_PATH")" >> "$GITHUB_OUTPUT"
 
-      #- name: Create GitHub Release
-      #  id: create_release
-      #  uses: softprops/action-gh-release@v2
-      #  with:
-      #    name: ${{ github.ref_name }}
-      #    tag_name: ${{ github.ref_name }}
-      #    generate_release_notes: true
-      #    files: |
-      #      ${{ steps.artifact.outputs.tar_path }}
-      #  env:
-      #    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub Release
+        if: github.event_name != 'workflow_dispatch'
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            ${{ steps.artifact.outputs.tar_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine version from tag
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            # workflow_dispatch: use 'test' as tag
+            TAG="test-$(date +%Y%m%d%H%M%S)"
+          fi
+
+          VERSION="${TAG#v}"  # enlève le 'v' si présent
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}" >> "$GITHUB_OUTPUT"
+
+          echo "Using git tag: $TAG"
+          echo "Docker image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -67,24 +90,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.ver.outputs.image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
